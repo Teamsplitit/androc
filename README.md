@@ -1,4 +1,4 @@
-# LAN Share P2P (No Server File Storage)
+# stagshare (No Server File Storage)
 
 Direct file transfer between sender and receiver browsers on same Wi-Fi.
 
@@ -38,6 +38,18 @@ Open:
 
 - `http://localhost:8080` on sender machine
 - `http://<sender-local-ip>:8080` on receiver machine
+
+## Deploy On Render
+
+1. Push latest code to GitHub (`main` branch).
+2. In Render dashboard, choose `New +` -> `Blueprint`.
+3. Connect repo: `https://github.com/Teamsplitit/androc.git`
+4. Render will detect [`render.yaml`](/Users/srinivas/Documents/games/androc/render.yaml) and create service `stagshare`.
+5. After deploy, open `https://<your-render-service>.onrender.com/health` to verify.
+
+Notes:
+- WebSockets are supported on Render web services.
+- Since this app uses browser-to-browser WebRTC, very restrictive NAT/firewall networks may still block some peer connections.
 
 ## Config
 

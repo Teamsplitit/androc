@@ -86,8 +86,11 @@ function closeShare(code, reason) {
   if (!share) return;
 
   wsSend(peers.get(share.senderId), { type: reason, code });
+  let receiverMessage = 'Share closed';
+  if (reason === 'share_expired') receiverMessage = 'Share expired';
+  if (reason === 'share_cancelled') receiverMessage = 'Sender cancelled the share';
   for (const rid of share.receiverIds) {
-    wsSend(peers.get(rid), { type: 'error', message: reason === 'share_expired' ? 'Share expired' : 'Share closed' });
+    wsSend(peers.get(rid), { type: 'error', message: receiverMessage });
   }
   shares.delete(code);
 }
@@ -297,6 +300,22 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === 'cancel_share') {
+      if (ws.role !== 'sender' || !ws.code) {
+        wsSend(ws, { type: 'error', message: 'No active sender share to cancel' });
+        return;
+      }
+      if (!shares.has(ws.code)) {
+        wsSend(ws, { type: 'error', message: 'Share is already closed' });
+        ws.code = null;
+        return;
+      }
+      closeShare(ws.code, 'share_cancelled');
+      ws.code = null;
+      ws.role = null;
+      return;
+    }
+
     wsSend(ws, { type: 'error', message: 'Unknown message type' });
   });
 
@@ -321,5 +340,5 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`LAN Share P2P running on port ${PORT}`);
+  console.log(`stagshare running on port ${PORT}`);
 });

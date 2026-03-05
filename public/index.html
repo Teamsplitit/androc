@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LAN Share P2P</title>
+    <title>stagshare</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet" />
@@ -58,9 +58,22 @@
         font-weight: 700;
         cursor: pointer;
       }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
       .primary { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff; }
       .secondary { background: #e9f0fb; color: var(--text); }
       .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .role-switch {
+        display: flex;
+        gap: 8px;
+        margin: 0 0 12px;
+      }
+      .role-switch button.active {
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        color: #fff;
+      }
       .status {
         margin-top: 10px;
         padding: 10px;
@@ -107,6 +120,40 @@
         margin: 0;
         font-weight: 500;
       }
+      .downloads-box {
+        margin-top: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: #fff;
+      }
+      .downloads-head {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .loader-box {
+        margin-top: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff;
+      }
+      .progress-track {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        background: #e8eef7;
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        transition: width 120ms linear;
+      }
       @media (max-width: 600px) {
         .wrap { padding: 20px 12px 30px; }
       }
@@ -114,11 +161,15 @@
   </head>
   <body>
     <main class="wrap">
-      <h1>LAN Share P2P</h1>
+      <h1>stagshare</h1>
       <p class="sub">Direct sender-to-receiver file transfer on same Wi-Fi. Server stores only temporary share code and signaling.</p>
+      <div class="role-switch">
+        <button id="modeSenderBtn" class="secondary" type="button">Sender Mode</button>
+        <button id="modeReceiverBtn" class="secondary" type="button">Receiver Mode</button>
+      </div>
 
       <div class="grid">
-        <section class="card">
+        <section id="sendCard" class="card">
           <h2>Send</h2>
           <label for="fileInput">Choose one or more files</label>
           <input id="fileInput" type="file" multiple />
@@ -126,8 +177,14 @@
             <button id="createBtn" class="primary" type="button">Create Share Code</button>
             <button id="copyCodeBtn" class="secondary" type="button">Copy Code</button>
             <button id="copyLinkBtn" class="secondary" type="button">Copy Link</button>
+            <button id="cancelShareBtn" class="secondary" type="button">Cancel Sharing</button>
           </div>
           <div id="sendStatus" class="status small">Select files and create share code.</div>
+          <div id="sendLoader" class="small loader-box">
+            <div class="progress-track"><div id="sendLoaderBar" class="progress-fill"></div></div>
+            <div id="sendLoaderText" style="margin-top:8px;">No active receiver download.</div>
+            <div id="sendRequestedText" style="margin-top:6px;"></div>
+          </div>
           <div id="qrWrap" class="qr hidden">
             <div class="small" style="margin-bottom:8px;">Scan from receiver device:</div>
             <img id="qrImage" alt="Share QR" />
@@ -135,7 +192,7 @@
           <div id="sendFiles" class="small"></div>
         </section>
 
-        <section class="card">
+        <section id="recvCard" class="card">
           <h2>Receive</h2>
           <label for="codeInput">Enter code</label>
           <input id="codeInput" type="text" maxlength="12" placeholder="Example: A7K2Q9" />
@@ -143,12 +200,24 @@
             <button id="joinBtn" class="primary" type="button">Join Share</button>
             <button id="chooseFolderBtn" class="secondary" type="button">Choose Save Folder</button>
           </div>
+          <div id="selectedFolderText" class="small" style="margin-top:6px;">Selected folder: none</div>
           <div class="row" style="margin-top: 8px;">
             <button id="downloadSelectedBtn" class="primary" type="button">Download Selected</button>
             <button id="downloadAllBtn" class="secondary" type="button">Download All</button>
           </div>
+          <div id="recvLoader" class="small loader-box">
+            <div class="progress-track"><div id="recvLoaderBar" class="progress-fill"></div></div>
+            <div id="recvLoaderText" style="margin-top:8px;">No active download.</div>
+          </div>
           <div id="recvStatus" class="status small">Enter code and join. For very large files, choose save folder first.</div>
           <div id="recvFiles" class="small file-list">File list appears after joining.</div>
+          <div id="readyDownloads" class="small downloads-box">
+            <div class="downloads-head">
+              <button id="saveAllReadyBtn" class="primary" type="button" disabled>Save All Ready Files</button>
+              <span id="readyCountText">0 files ready</span>
+            </div>
+            <div id="readyDownloadsList">Completed files will appear here when ready to save.</div>
+          </div>
         </section>
       </div>
 
@@ -173,18 +242,33 @@
       const createBtn = document.getElementById('createBtn');
       const copyCodeBtn = document.getElementById('copyCodeBtn');
       const copyLinkBtn = document.getElementById('copyLinkBtn');
+      const cancelShareBtn = document.getElementById('cancelShareBtn');
+      const modeSenderBtn = document.getElementById('modeSenderBtn');
+      const modeReceiverBtn = document.getElementById('modeReceiverBtn');
+      const sendCard = document.getElementById('sendCard');
+      const recvCard = document.getElementById('recvCard');
       const sendStatus = document.getElementById('sendStatus');
       const sendFiles = document.getElementById('sendFiles');
+      const sendLoaderBar = document.getElementById('sendLoaderBar');
+      const sendLoaderText = document.getElementById('sendLoaderText');
+      const sendRequestedText = document.getElementById('sendRequestedText');
       const qrWrap = document.getElementById('qrWrap');
       const qrImage = document.getElementById('qrImage');
 
       const codeInput = document.getElementById('codeInput');
       const joinBtn = document.getElementById('joinBtn');
       const chooseFolderBtn = document.getElementById('chooseFolderBtn');
+      const selectedFolderText = document.getElementById('selectedFolderText');
       const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
       const downloadAllBtn = document.getElementById('downloadAllBtn');
       const recvStatus = document.getElementById('recvStatus');
       const recvFiles = document.getElementById('recvFiles');
+      const recvLoaderBar = document.getElementById('recvLoaderBar');
+      const recvLoaderText = document.getElementById('recvLoaderText');
+      const readyDownloads = document.getElementById('readyDownloads');
+      const saveAllReadyBtn = document.getElementById('saveAllReadyBtn');
+      const readyCountText = document.getElementById('readyCountText');
+      const readyDownloadsList = document.getElementById('readyDownloadsList');
       downloadSelectedBtn.disabled = true;
       downloadAllBtn.disabled = true;
 
@@ -204,6 +288,21 @@
 
       let recvCurrent = null;
       let recvWriteQueue = Promise.resolve();
+      let recvMessageQueue = Promise.resolve();
+      let readyToSave = [];
+      let recvBatch = {
+        totalBytes: 0,
+        receivedBytes: 0,
+        startedAt: 0,
+        active: false,
+      };
+      let senderBatch = {
+        totalBytes: 0,
+        sentBytes: 0,
+        startedAt: 0,
+        active: false,
+        completedRequests: 0,
+      };
       const crcTable = (() => {
         const table = new Uint32Array(256);
         for (let i = 0; i < 256; i += 1) {
@@ -249,8 +348,83 @@
         return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, '0');
       }
 
+      function formatDuration(seconds) {
+        const s = Math.max(0, Math.ceil(seconds));
+        const m = Math.floor(s / 60);
+        const rem = s % 60;
+        if (m <= 0) return `${rem}s`;
+        return `${m}m ${rem}s`;
+      }
+
+      function resetReceiveLoader() {
+        recvBatch = {
+          totalBytes: 0,
+          receivedBytes: 0,
+          startedAt: 0,
+          active: false,
+        };
+        recvLoaderBar.style.width = '0%';
+        recvLoaderText.textContent = 'No active download.';
+      }
+
+      function resetSenderLoader() {
+        senderBatch.totalBytes = 0;
+        senderBatch.sentBytes = 0;
+        senderBatch.startedAt = 0;
+        senderBatch.active = false;
+        sendLoaderBar.style.width = '0%';
+        sendLoaderText.textContent = `No active receiver download. Completed: ${senderBatch.completedRequests}`;
+        sendRequestedText.textContent = '';
+      }
+
+      function updateSenderLoader(currentFileName = '') {
+        if (!senderBatch.active || senderBatch.totalBytes <= 0) return;
+        const pct = Math.min(100, (senderBatch.sentBytes / senderBatch.totalBytes) * 100);
+        sendLoaderBar.style.width = `${pct.toFixed(1)}%`;
+        const elapsedSec = Math.max(0.001, (Date.now() - senderBatch.startedAt) / 1000);
+        const speed = senderBatch.sentBytes / elapsedSec;
+        const remainingBytes = Math.max(0, senderBatch.totalBytes - senderBatch.sentBytes);
+        const etaSec = speed > 0 ? remainingBytes / speed : 0;
+        const fileText = currentFileName ? ` | current: ${currentFileName}` : '';
+        sendLoaderText.textContent = `${pct.toFixed(1)}% • ${bytes(senderBatch.sentBytes)} / ${bytes(senderBatch.totalBytes)} • ${bytes(speed)}/s • ETA ${formatDuration(etaSec)}${fileText}`;
+      }
+
+      function updateReceiveLoader(currentFileName = '') {
+        if (!recvBatch.active || recvBatch.totalBytes <= 0) {
+          return;
+        }
+        const pct = Math.min(100, (recvBatch.receivedBytes / recvBatch.totalBytes) * 100);
+        recvLoaderBar.style.width = `${pct.toFixed(1)}%`;
+
+        const elapsedSec = Math.max(0.001, (Date.now() - recvBatch.startedAt) / 1000);
+        const speed = recvBatch.receivedBytes / elapsedSec;
+        const remainingBytes = Math.max(0, recvBatch.totalBytes - recvBatch.receivedBytes);
+        const etaSec = speed > 0 ? remainingBytes / speed : 0;
+        const speedText = `${bytes(speed)}/s`;
+        const etaText = remainingBytes > 0 ? formatDuration(etaSec) : '0s';
+        const fileText = currentFileName ? ` | current: ${currentFileName}` : '';
+
+        recvLoaderText.textContent = `${pct.toFixed(1)}% • ${bytes(recvBatch.receivedBytes)} / ${bytes(recvBatch.totalBytes)} • ${speedText} • ETA ${etaText}${fileText}`;
+      }
+
       function fileKey(meta) {
         return `${meta.name}:${meta.size}:${meta.lastModified || 0}`;
+      }
+
+      function setMode(mode) {
+        if (mode === 'sender') {
+          sendCard.classList.remove('hidden');
+          recvCard.classList.add('hidden');
+          modeSenderBtn.classList.add('active');
+          modeReceiverBtn.classList.remove('active');
+          return;
+        }
+        if (mode === 'receiver') {
+          sendCard.classList.add('hidden');
+          recvCard.classList.remove('hidden');
+          modeSenderBtn.classList.remove('active');
+          modeReceiverBtn.classList.add('active');
+        }
       }
 
       function renderFileList(target, files) {
@@ -274,6 +448,42 @@
           return `<div class="file-row"><input type="checkbox" data-file-key="${key}" id="f-${idx}" ${checked} /><label for="f-${idx}">${f.name} (${bytes(f.size)})</label></div>`;
         }).join('');
         recvFiles.innerHTML = rows;
+      }
+
+      function renderReadyDownloads() {
+        if (saveDirectoryHandle) {
+          readyDownloads.style.display = 'none';
+          return;
+        }
+        readyDownloads.style.display = 'block';
+        readyCountText.textContent = `${readyToSave.length} file${readyToSave.length === 1 ? '' : 's'} ready`;
+        saveAllReadyBtn.disabled = readyToSave.length === 0;
+
+        if (!readyToSave.length) {
+          readyDownloadsList.textContent = 'Completed files will appear here when ready to save.';
+          return;
+        }
+
+        const items = readyToSave.map((f, idx) => (
+          `<div class="file-row"><button class="secondary" data-save-idx="${idx}" type="button">Save</button><span>${f.name} (${bytes(f.size)})</span></div>`
+        )).join('');
+        readyDownloadsList.innerHTML = items;
+
+        readyDownloadsList.querySelectorAll('button[data-save-idx]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const idx = Number(btn.getAttribute('data-save-idx'));
+            saveReadyFile(idx);
+          });
+        });
+      }
+
+      function saveReadyFile(idx) {
+        const file = readyToSave[idx];
+        if (!file) return;
+        const a = document.createElement('a');
+        a.href = file.url;
+        a.download = file.name;
+        a.click();
       }
 
       function getRequestedKeys(downloadAll) {
@@ -315,6 +525,9 @@
             senderCode = msg.code;
             senderLink = `${location.origin}/?code=${encodeURIComponent(senderCode)}`;
             senderFiles = msg.files;
+            cancelShareBtn.disabled = false;
+            senderBatch.completedRequests = 0;
+            resetSenderLoader();
             const exp = new Date(msg.expiresAt).toLocaleTimeString();
             sendStatus.innerHTML = `Code ready:<br><span class="code">${senderCode}</span><br>Expires: ${exp}<br>Receiver can join and download directly from your device.`;
             renderFileList(sendFiles, senderFiles);
@@ -337,6 +550,7 @@
             recvStatus.textContent = 'Connected to sender. Select files and click Download Selected or Download All.';
             downloadSelectedBtn.disabled = true;
             downloadAllBtn.disabled = true;
+            resetReceiveLoader();
             return;
           }
 
@@ -347,8 +561,23 @@
 
           if (msg.type === 'share_expired') {
             if (msg.code === senderCode) {
+              cancelShareBtn.disabled = true;
+              senderCode = '';
+              senderLink = '';
+              qrWrap.classList.add('hidden');
+              resetSenderLoader();
               sendStatus.textContent = 'Share expired. Create a new code.';
             }
+          }
+
+          if (msg.type === 'share_cancelled' || msg.type === 'share_replaced') {
+            cancelShareBtn.disabled = true;
+            senderCode = '';
+            senderLink = '';
+            qrWrap.classList.add('hidden');
+            resetSenderLoader();
+            sendStatus.textContent = msg.type === 'share_cancelled' ? 'Share cancelled.' : 'Share replaced by a new code.';
+            return;
           }
         };
 
@@ -408,16 +637,29 @@
             }
 
             entry.isSending = true;
+            senderBatch.totalBytes = chosen.reduce((sum, f) => sum + Number(f.size || 0), 0);
+            senderBatch.sentBytes = 0;
+            senderBatch.startedAt = Date.now();
+            senderBatch.active = true;
+            sendRequestedText.textContent = `Receiver requested: ${chosen.map((f) => f.name).join(', ')}`;
             sendStatus.textContent = `Streaming ${chosen.length} requested file(s)...`;
             try {
-              await transferFilesToPeer(dc, chosen);
+              await transferFilesToPeer(dc, chosen, ({ delta, fileName }) => {
+                senderBatch.sentBytes += delta;
+                updateSenderLoader(fileName);
+              });
               sendStatus.textContent = 'Transfer complete.';
+              senderBatch.active = false;
+              senderBatch.completedRequests += 1;
+              sendLoaderBar.style.width = '100%';
+              sendLoaderText.textContent = `Completed • ${bytes(senderBatch.totalBytes)} transferred • Requests completed: ${senderBatch.completedRequests}`;
             } finally {
               entry.isSending = false;
             }
           } catch (err) {
             const entry = senderPeers.get(receiverId);
             if (entry) entry.isSending = false;
+            senderBatch.active = false;
             sendStatus.textContent = `Transfer failed: ${err.message}`;
           }
         };
@@ -476,9 +718,11 @@
             downloadAllBtn.disabled = true;
           };
           receiverChannel.onmessage = (ev) => {
-            handleReceiverMessage(ev.data).catch((err) => {
-              recvStatus.textContent = `Receive error: ${err.message}`;
-            });
+            recvMessageQueue = recvMessageQueue
+              .then(() => handleReceiverMessage(ev.data))
+              .catch((err) => {
+                recvStatus.textContent = `Receive error: ${err.message}`;
+              });
           };
         };
 
@@ -488,7 +732,7 @@
         wsSend({ type: 'signal', to: from, data: { kind: 'sdp', sdp: receiverPc.localDescription } });
       }
 
-      async function transferFilesToPeer(dc, fileListMeta) {
+      async function transferFilesToPeer(dc, fileListMeta, onProgress) {
         const selected = Array.from(fileInput.files);
         const map = new Map(selected.map((f) => [`${f.name}:${f.size}:${f.lastModified}`, f]));
 
@@ -525,6 +769,9 @@
             dc.send(buf);
             offset = end;
             sendStatus.textContent = `Sending ${file.name}: ${Math.floor((offset / file.size) * 100)}%`;
+            if (typeof onProgress === 'function') {
+              onProgress({ delta: buf.byteLength, fileName: file.name });
+            }
           }
 
           dc.send(JSON.stringify({ t: 'file-end', bytes: file.size, crc32: crc32Hex(crc) }));
@@ -551,7 +798,21 @@
             return;
           }
           if (msg.t === 'all-done') {
-            recvStatus.textContent = 'All files downloaded.';
+            await recvWriteQueue;
+            if (recvCurrent) {
+              recvStatus.textContent = 'Finalizing file...';
+            } else if (saveDirectoryHandle) {
+              recvStatus.textContent = 'All files saved to selected folder.';
+            } else if (readyToSave.length > 0) {
+              recvStatus.textContent = 'All files ready. Click Save or Save All Ready Files.';
+            } else {
+              recvStatus.textContent = 'Transfer ended but no files were finalized. Retry download.';
+            }
+            if (recvBatch.active) {
+              recvBatch.active = false;
+              recvLoaderBar.style.width = '100%';
+              recvLoaderText.textContent = `Completed • ${bytes(recvBatch.totalBytes)} transferred`;
+            }
           }
           if (msg.t === 'error') {
             recvStatus.textContent = `Sender error: ${msg.message}`;
@@ -576,6 +837,7 @@
           size: expectedSize,
           type: meta.type || 'application/octet-stream',
           received: 0,
+          reported: 0,
           chunks: [],
           writer: null,
           crc: 0xffffffff,
@@ -592,7 +854,13 @@
       async function receiverWriteChunk(buf) {
         if (!recvCurrent) return;
         recvCurrent.received += buf.byteLength;
+        const delta = recvCurrent.received - recvCurrent.reported;
+        recvCurrent.reported = recvCurrent.received;
         recvCurrent.crc = updateCrc32(recvCurrent.crc, buf);
+        if (recvBatch.active && delta > 0) {
+          recvBatch.receivedBytes += delta;
+          updateReceiveLoader(recvCurrent.name);
+        }
 
         if (recvCurrent.received > recvCurrent.size) {
           throw new Error('Incoming data exceeds expected file size');
@@ -637,18 +905,20 @@
         } else {
           const blob = new Blob(recvCurrent.chunks, { type: recvCurrent.type });
           const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = recvCurrent.name;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-          recvStatus.textContent = `Downloaded ${recvCurrent.name}`;
+          readyToSave.push({
+            name: recvCurrent.name,
+            size: recvCurrent.received,
+            url,
+          });
+          renderReadyDownloads();
+          recvStatus.textContent = `${recvCurrent.name} is ready. Click Save (or Save All Ready Files).`;
         }
 
         recvCurrent = null;
       }
 
       createBtn.addEventListener('click', () => {
+        setMode('sender');
         const files = Array.from(fileInput.files);
         if (!files.length) {
           sendStatus.textContent = 'Select at least one file.';
@@ -671,6 +941,14 @@
         }));
 
         wsSend({ type: 'register_sender', files: meta });
+      });
+
+      cancelShareBtn.addEventListener('click', () => {
+        if (!senderCode) {
+          sendStatus.textContent = 'No active share to cancel.';
+          return;
+        }
+        wsSend({ type: 'cancel_share' });
       });
 
       copyCodeBtn.addEventListener('click', async () => {
@@ -700,6 +978,7 @@
       });
 
       joinBtn.addEventListener('click', () => {
+        setMode('receiver');
         const code = cleanCode(codeInput.value);
         if (!code) {
           recvStatus.textContent = 'Enter valid code.';
@@ -707,14 +986,29 @@
         }
         downloadSelectedBtn.disabled = true;
         downloadAllBtn.disabled = true;
+        readyToSave.forEach((f) => URL.revokeObjectURL(f.url));
+        readyToSave = [];
+        renderReadyDownloads();
         wsSend({ type: 'join_share', code });
         recvStatus.textContent = 'Joining share...';
       });
 
-      function requestDownload(downloadAll) {
+      async function requestDownload(downloadAll) {
         if (!receiverChannel || receiverChannel.readyState !== 'open') {
           recvStatus.textContent = 'Direct channel not ready yet. Wait a moment and try again.';
           return;
+        }
+        if (saveDirectoryHandle && saveDirectoryHandle.requestPermission) {
+          try {
+            const state = await saveDirectoryHandle.requestPermission({ mode: 'readwrite' });
+            if (state !== 'granted') {
+              recvStatus.textContent = 'Folder write permission denied. Choose Save Folder again.';
+              return;
+            }
+          } catch {
+            recvStatus.textContent = 'Could not verify folder permission. Choose Save Folder again.';
+            return;
+          }
         }
 
         const keys = getRequestedKeys(downloadAll);
@@ -723,14 +1017,34 @@
           return;
         }
 
+        const fileByKey = new Map(receiverAvailableFiles.map((f) => [fileKey(f), f]));
+        const selectedFiles = keys.map((k) => fileByKey.get(k)).filter(Boolean);
+        const totalBytes = selectedFiles.reduce((sum, f) => sum + Number(f.size || 0), 0);
+        recvBatch = {
+          totalBytes,
+          receivedBytes: 0,
+          startedAt: Date.now(),
+          active: totalBytes > 0,
+        };
+        recvLoaderBar.style.width = '0%';
+        recvLoaderText.textContent = totalBytes > 0
+          ? `Starting download... 0% • 0 B / ${bytes(totalBytes)}`
+          : 'Starting download...';
+
         receiverChannel.send(JSON.stringify({ t: 'request-files', keys }));
         recvStatus.textContent = `Requested ${keys.length} file(s). Waiting for sender stream...`;
       }
 
-      downloadSelectedBtn.addEventListener('click', () => requestDownload(false));
-      downloadAllBtn.addEventListener('click', () => requestDownload(true));
+      downloadSelectedBtn.addEventListener('click', () => { requestDownload(false); });
+      downloadAllBtn.addEventListener('click', () => { requestDownload(true); });
+      saveAllReadyBtn.addEventListener('click', () => {
+        for (let i = 0; i < readyToSave.length; i += 1) {
+          saveReadyFile(i);
+        }
+      });
 
       chooseFolderBtn.addEventListener('click', async () => {
+        setMode('receiver');
         if (!window.showDirectoryPicker) {
           recvStatus.textContent = 'Folder picker not supported in this browser. Use Chrome/Edge for very large files.';
           return;
@@ -739,6 +1053,8 @@
         try {
           saveDirectoryHandle = await window.showDirectoryPicker();
           recvStatus.textContent = 'Save folder selected. Large files will stream directly to disk.';
+          selectedFolderText.textContent = `Selected folder: ${saveDirectoryHandle.name || '(unknown)'}`;
+          renderReadyDownloads();
         } catch {
           recvStatus.textContent = 'Folder selection canceled.';
         }
@@ -746,8 +1062,20 @@
 
       const params = new URLSearchParams(window.location.search);
       const codeFromUrl = cleanCode(params.get('code') || '');
-      if (codeFromUrl) codeInput.value = codeFromUrl;
+      if (codeFromUrl) {
+        codeInput.value = codeFromUrl;
+        setMode('receiver');
+      } else {
+        setMode('sender');
+      }
 
+      modeSenderBtn.addEventListener('click', () => setMode('sender'));
+      modeReceiverBtn.addEventListener('click', () => setMode('receiver'));
+
+      renderReadyDownloads();
+      resetReceiveLoader();
+      cancelShareBtn.disabled = true;
+      resetSenderLoader();
       connectSignal();
     </script>
   </body>

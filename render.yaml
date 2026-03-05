@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: stagshare
+    runtime: node
+    repo: https://github.com/Teamsplitit/androc.git
+    branch: main
+    buildCommand: npm ci
+    startCommand: npm start
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SHARE_TTL_MS
+        value: "1800000"
