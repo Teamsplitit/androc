@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LAN Share P2P</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #f4f8fb;
+        --card: #ffffff;
+        --text: #0a1524;
+        --muted: #4a5f79;
+        --accent: #0066ff;
+        --accent2: #00a6a6;
+        --line: #d8e2ef;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: 'Manrope', sans-serif;
+        color: var(--text);
+        min-height: 100vh;
+        background: radial-gradient(circle at 90% 0%, #ddf1ff 0%, transparent 42%),
+          radial-gradient(circle at 10% 100%, #e4fff4 0%, transparent 38%),
+          var(--bg);
+      }
+      .wrap { max-width: 1000px; margin: 0 auto; padding: 26px 16px 38px; }
+      h1 { margin: 0 0 6px; font-size: clamp(1.6rem, 2.6vw, 2.35rem); }
+      .sub { margin: 0 0 16px; color: var(--muted); }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 8px 24px rgba(10, 35, 70, 0.06);
+      }
+      label { display: block; margin-bottom: 8px; font-weight: 600; }
+      input[type='file'], input[type='text'] {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        font-size: 16px;
+        margin-bottom: 10px;
+      }
+      button {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .primary { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff; }
+      .secondary { background: #e9f0fb; color: var(--text); }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .status {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #dbe8f7;
+        border-radius: 10px;
+        background: #f7fbff;
+        word-break: break-word;
+      }
+      .small { font-size: 0.9rem; color: var(--muted); }
+      .code {
+        display: inline-block;
+        font-weight: 800;
+        font-size: 1.4rem;
+        letter-spacing: 0.08em;
+        margin: 6px 0;
+      }
+      .hidden { display: none; }
+      .qr {
+        margin-top: 12px;
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        background: #fbfdff;
+        padding: 10px;
+      }
+      .qr img { display: block; width: 180px; max-width: 100%; border-radius: 10px; background: #fff; }
+      ul { margin: 8px 0 0 18px; padding: 0; }
+      li { margin-bottom: 4px; }
+      .file-list {
+        margin-top: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: #fff;
+        max-height: 200px;
+        overflow: auto;
+      }
+      .file-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+      }
+      .file-row label {
+        margin: 0;
+        font-weight: 500;
+      }
+      @media (max-width: 600px) {
+        .wrap { padding: 20px 12px 30px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>LAN Share P2P</h1>
+      <p class="sub">Direct sender-to-receiver file transfer on same Wi-Fi. Server stores only temporary share code and signaling.</p>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Send</h2>
+          <label for="fileInput">Choose one or more files</label>
+          <input id="fileInput" type="file" multiple />
+          <div class="row">
+            <button id="createBtn" class="primary" type="button">Create Share Code</button>
+            <button id="copyCodeBtn" class="secondary" type="button">Copy Code</button>
+            <button id="copyLinkBtn" class="secondary" type="button">Copy Link</button>
+          </div>
+          <div id="sendStatus" class="status small">Select files and create share code.</div>
+          <div id="qrWrap" class="qr hidden">
+            <div class="small" style="margin-bottom:8px;">Scan from receiver device:</div>
+            <img id="qrImage" alt="Share QR" />
+          </div>
+          <div id="sendFiles" class="small"></div>
+        </section>
+
+        <section class="card">
+          <h2>Receive</h2>
+          <label for="codeInput">Enter code</label>
+          <input id="codeInput" type="text" maxlength="12" placeholder="Example: A7K2Q9" />
+          <div class="row">
+            <button id="joinBtn" class="primary" type="button">Join Share</button>
+            <button id="chooseFolderBtn" class="secondary" type="button">Choose Save Folder</button>
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <button id="downloadSelectedBtn" class="primary" type="button">Download Selected</button>
+            <button id="downloadAllBtn" class="secondary" type="button">Download All</button>
+          </div>
+          <div id="recvStatus" class="status small">Enter code and join. For very large files, choose save folder first.</div>
+          <div id="recvFiles" class="small file-list">File list appears after joining.</div>
+        </section>
+      </div>
+
+      <p class="small" style="margin-top:14px;">
+        Large file note: for multi-GB downloads, use Chrome/Edge and click "Choose Save Folder" so files are streamed directly to disk.
+      </p>
+      <p class="small" style="margin-top:10px;">
+        Copyright © Devi Srinivas Vasamsetti Technologies
+      </p>
+    </main>
+
+    <script>
+      const SIGNAL_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+      const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+      const CHUNK_SIZE = 64 * 1024;
+      const BUFFER_HIGH_WATER = 4 * 1024 * 1024;
+      const BUFFER_LOW_WATER = 1 * 1024 * 1024;
+      const MAX_FILES = 200;
+      const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024 * 1024;
+
+      const fileInput = document.getElementById('fileInput');
+      const createBtn = document.getElementById('createBtn');
+      const copyCodeBtn = document.getElementById('copyCodeBtn');
+      const copyLinkBtn = document.getElementById('copyLinkBtn');
+      const sendStatus = document.getElementById('sendStatus');
+      const sendFiles = document.getElementById('sendFiles');
+      const qrWrap = document.getElementById('qrWrap');
+      const qrImage = document.getElementById('qrImage');
+
+      const codeInput = document.getElementById('codeInput');
+      const joinBtn = document.getElementById('joinBtn');
+      const chooseFolderBtn = document.getElementById('chooseFolderBtn');
+      const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+      const downloadAllBtn = document.getElementById('downloadAllBtn');
+      const recvStatus = document.getElementById('recvStatus');
+      const recvFiles = document.getElementById('recvFiles');
+      downloadSelectedBtn.disabled = true;
+      downloadAllBtn.disabled = true;
+
+      let ws;
+      let myPeerId = null;
+      let senderCode = '';
+      let senderLink = '';
+      let senderFiles = [];
+
+      let receiverSenderId = null;
+      let receiverPc = null;
+      let receiverChannel = null;
+      let receiverAvailableFiles = [];
+
+      let senderPeers = new Map();
+      let saveDirectoryHandle = null;
+
+      let recvCurrent = null;
+      let recvWriteQueue = Promise.resolve();
+      const crcTable = (() => {
+        const table = new Uint32Array(256);
+        for (let i = 0; i < 256; i += 1) {
+          let c = i;
+          for (let j = 0; j < 8; j += 1) {
+            c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1)) >>> 0;
+          }
+          table[i] = c >>> 0;
+        }
+        return table;
+      })();
+
+      function bytes(n) {
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+        if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+      }
+
+      function cleanCode(v) {
+        return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      }
+
+      function sanitizeFileName(name) {
+        const cleaned = String(name || '')
+          .replace(/[\\/]/g, '_')
+          .replace(/[\u0000-\u001F\u007F]/g, '')
+          .trim()
+          .slice(0, 180);
+        return cleaned || 'download.bin';
+      }
+
+      function updateCrc32(crc, arrayBuffer) {
+        const bytesView = new Uint8Array(arrayBuffer);
+        let c = crc >>> 0;
+        for (let i = 0; i < bytesView.length; i += 1) {
+          c = (crcTable[(c ^ bytesView[i]) & 0xff] ^ (c >>> 8)) >>> 0;
+        }
+        return c >>> 0;
+      }
+
+      function crc32Hex(crc) {
+        return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, '0');
+      }
+
+      function fileKey(meta) {
+        return `${meta.name}:${meta.size}:${meta.lastModified || 0}`;
+      }
+
+      function renderFileList(target, files) {
+        if (!files || files.length === 0) {
+          target.innerHTML = '';
+          return;
+        }
+        const items = files.map((f) => `<li>${f.name} (${bytes(f.size)})</li>`).join('');
+        target.innerHTML = `<div style="margin-top:8px;">Files:</div><ul>${items}</ul>`;
+      }
+
+      function renderReceiverSelectableFiles(files) {
+        if (!files || files.length === 0) {
+          recvFiles.textContent = 'No files available.';
+          return;
+        }
+
+        const rows = files.map((f, idx) => {
+          const key = fileKey(f);
+          const checked = idx === 0 ? 'checked' : '';
+          return `<div class="file-row"><input type="checkbox" data-file-key="${key}" id="f-${idx}" ${checked} /><label for="f-${idx}">${f.name} (${bytes(f.size)})</label></div>`;
+        }).join('');
+        recvFiles.innerHTML = rows;
+      }
+
+      function getRequestedKeys(downloadAll) {
+        if (downloadAll) return receiverAvailableFiles.map((f) => fileKey(f));
+        return Array.from(recvFiles.querySelectorAll('input[type="checkbox"][data-file-key]:checked'))
+          .map((el) => el.getAttribute('data-file-key'))
+          .filter(Boolean);
+      }
+
+      function connectSignal() {
+        ws = new WebSocket(SIGNAL_URL);
+
+        ws.onopen = () => {
+          sendStatus.textContent = 'Connected. Ready to share files.';
+        };
+
+        ws.onmessage = async (event) => {
+          let msg;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+
+          if (msg.type === 'hello') {
+            myPeerId = msg.peerId;
+            return;
+          }
+
+          if (msg.type === 'error') {
+            if (msg.message) {
+              recvStatus.textContent = `Error: ${msg.message}`;
+              sendStatus.textContent = `Error: ${msg.message}`;
+            }
+            return;
+          }
+
+          if (msg.type === 'share_created') {
+            senderCode = msg.code;
+            senderLink = `${location.origin}/?code=${encodeURIComponent(senderCode)}`;
+            senderFiles = msg.files;
+            const exp = new Date(msg.expiresAt).toLocaleTimeString();
+            sendStatus.innerHTML = `Code ready:<br><span class="code">${senderCode}</span><br>Expires: ${exp}<br>Receiver can join and download directly from your device.`;
+            renderFileList(sendFiles, senderFiles);
+            qrImage.src = `/api/share/${encodeURIComponent(senderCode)}/qr`;
+            qrWrap.classList.remove('hidden');
+            return;
+          }
+
+          if (msg.type === 'receiver_joined') {
+            startSenderPeer(msg.receiverId).catch((err) => {
+              sendStatus.textContent = `Sender peer error: ${err.message}`;
+            });
+            return;
+          }
+
+          if (msg.type === 'share_joined') {
+            receiverSenderId = msg.senderId;
+            receiverAvailableFiles = Array.isArray(msg.files) ? msg.files : [];
+            renderReceiverSelectableFiles(receiverAvailableFiles);
+            recvStatus.textContent = 'Connected to sender. Select files and click Download Selected or Download All.';
+            downloadSelectedBtn.disabled = true;
+            downloadAllBtn.disabled = true;
+            return;
+          }
+
+          if (msg.type === 'signal') {
+            await handleSignal(msg.from, msg.data);
+            return;
+          }
+
+          if (msg.type === 'share_expired') {
+            if (msg.code === senderCode) {
+              sendStatus.textContent = 'Share expired. Create a new code.';
+            }
+          }
+        };
+
+        ws.onclose = () => {
+          sendStatus.textContent = 'Signal disconnected. Reconnecting...';
+          setTimeout(connectSignal, 1200);
+        };
+      }
+
+      function wsSend(payload) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('Signal server disconnected');
+        ws.send(JSON.stringify(payload));
+      }
+
+      async function startSenderPeer(receiverId) {
+        if (!senderFiles.length) return;
+
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        const dc = pc.createDataChannel('files', { ordered: true });
+        dc.binaryType = 'arraybuffer';
+        dc.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
+
+        senderPeers.set(receiverId, { pc, dc, isSending: false });
+
+        pc.onicecandidate = (e) => {
+          if (!e.candidate) return;
+          wsSend({ type: 'signal', to: receiverId, data: { kind: 'ice', candidate: e.candidate } });
+        };
+
+        dc.onopen = () => {
+          sendStatus.textContent = 'Receiver connected. Waiting for receiver download request...';
+        };
+
+        dc.onmessage = async (evt) => {
+          try {
+            const msg = JSON.parse(evt.data);
+            if (msg.t !== 'request-files') return;
+
+            const entry = senderPeers.get(receiverId);
+            if (!entry) return;
+            if (entry.isSending) {
+              dc.send(JSON.stringify({ t: 'error', message: 'Transfer already in progress' }));
+              return;
+            }
+
+            const requestedKeys = Array.isArray(msg.keys) ? msg.keys : [];
+            if (!requestedKeys.length) {
+              dc.send(JSON.stringify({ t: 'error', message: 'No files selected by receiver' }));
+              return;
+            }
+
+            const metaByKey = new Map(senderFiles.map((f) => [fileKey(f), f]));
+            const chosen = requestedKeys.map((k) => metaByKey.get(k)).filter(Boolean);
+            if (!chosen.length) {
+              dc.send(JSON.stringify({ t: 'error', message: 'Requested files not available' }));
+              return;
+            }
+
+            entry.isSending = true;
+            sendStatus.textContent = `Streaming ${chosen.length} requested file(s)...`;
+            try {
+              await transferFilesToPeer(dc, chosen);
+              sendStatus.textContent = 'Transfer complete.';
+            } finally {
+              entry.isSending = false;
+            }
+          } catch (err) {
+            const entry = senderPeers.get(receiverId);
+            if (entry) entry.isSending = false;
+            sendStatus.textContent = `Transfer failed: ${err.message}`;
+          }
+        };
+
+        dc.onclose = () => {
+          senderPeers.delete(receiverId);
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        wsSend({ type: 'signal', to: receiverId, data: { kind: 'sdp', sdp: pc.localDescription } });
+      }
+
+      async function handleSignal(from, data) {
+        if (data.kind === 'sdp') {
+          if (data.sdp.type === 'offer') {
+            await handleReceiverOffer(from, data.sdp);
+          } else if (data.sdp.type === 'answer') {
+            const entry = senderPeers.get(from);
+            if (entry) await entry.pc.setRemoteDescription(data.sdp);
+          }
+          return;
+        }
+
+        if (data.kind === 'ice') {
+          if (receiverPc && from === receiverSenderId) {
+            await receiverPc.addIceCandidate(data.candidate);
+            return;
+          }
+          const entry = senderPeers.get(from);
+          if (entry) {
+            await entry.pc.addIceCandidate(data.candidate);
+          }
+        }
+      }
+
+      async function handleReceiverOffer(from, offer) {
+        receiverSenderId = from;
+        receiverPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+        receiverPc.onicecandidate = (e) => {
+          if (!e.candidate) return;
+          wsSend({ type: 'signal', to: from, data: { kind: 'ice', candidate: e.candidate } });
+        };
+
+        receiverPc.ondatachannel = (evt) => {
+          receiverChannel = evt.channel;
+          receiverChannel.binaryType = 'arraybuffer';
+          receiverChannel.onopen = () => {
+            recvStatus.textContent = 'Direct channel open. Choose files and start download.';
+            downloadSelectedBtn.disabled = false;
+            downloadAllBtn.disabled = false;
+          };
+          receiverChannel.onclose = () => {
+            downloadSelectedBtn.disabled = true;
+            downloadAllBtn.disabled = true;
+          };
+          receiverChannel.onmessage = (ev) => {
+            handleReceiverMessage(ev.data).catch((err) => {
+              recvStatus.textContent = `Receive error: ${err.message}`;
+            });
+          };
+        };
+
+        await receiverPc.setRemoteDescription(offer);
+        const answer = await receiverPc.createAnswer();
+        await receiverPc.setLocalDescription(answer);
+        wsSend({ type: 'signal', to: from, data: { kind: 'sdp', sdp: receiverPc.localDescription } });
+      }
+
+      async function transferFilesToPeer(dc, fileListMeta) {
+        const selected = Array.from(fileInput.files);
+        const map = new Map(selected.map((f) => [`${f.name}:${f.size}:${f.lastModified}`, f]));
+
+        for (const meta of fileListMeta) {
+          const key = `${meta.name}:${meta.size}:${meta.lastModified}`;
+          const file = map.get(key);
+          if (!file) continue;
+
+          const safeName = sanitizeFileName(file.name);
+          dc.send(JSON.stringify({ t: 'file-start', name: safeName, size: file.size, type: file.type || 'application/octet-stream' }));
+
+          let offset = 0;
+          let crc = 0xffffffff;
+          while (offset < file.size) {
+            const end = Math.min(offset + CHUNK_SIZE, file.size);
+            const chunk = file.slice(offset, end);
+            const buf = await chunk.arrayBuffer();
+            crc = updateCrc32(crc, buf);
+
+            while (dc.bufferedAmount > BUFFER_HIGH_WATER) {
+              await new Promise((resolve) => {
+                const onLow = () => {
+                  dc.removeEventListener('bufferedamountlow', onLow);
+                  resolve();
+                };
+                dc.addEventListener('bufferedamountlow', onLow);
+                setTimeout(() => {
+                  dc.removeEventListener('bufferedamountlow', onLow);
+                  resolve();
+                }, 120);
+              });
+            }
+
+            dc.send(buf);
+            offset = end;
+            sendStatus.textContent = `Sending ${file.name}: ${Math.floor((offset / file.size) * 100)}%`;
+          }
+
+          dc.send(JSON.stringify({ t: 'file-end', bytes: file.size, crc32: crc32Hex(crc) }));
+        }
+
+        dc.send(JSON.stringify({ t: 'all-done' }));
+      }
+
+      async function handleReceiverMessage(data) {
+        if (typeof data === 'string') {
+          let msg;
+          try {
+            msg = JSON.parse(data);
+          } catch {
+            recvStatus.textContent = 'Receive error: invalid control message';
+            return;
+          }
+          if (msg.t === 'file-start') {
+            await receiverStartFile(msg);
+            return;
+          }
+          if (msg.t === 'file-end') {
+            await receiverFinishFile(msg);
+            return;
+          }
+          if (msg.t === 'all-done') {
+            recvStatus.textContent = 'All files downloaded.';
+          }
+          if (msg.t === 'error') {
+            recvStatus.textContent = `Sender error: ${msg.message}`;
+          }
+          return;
+        }
+
+        const chunkBuffer = data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+        recvWriteQueue = recvWriteQueue.then(() => receiverWriteChunk(chunkBuffer));
+        await recvWriteQueue;
+      }
+
+      async function receiverStartFile(meta) {
+        const safeName = sanitizeFileName(meta.name);
+        const expectedSize = Number(meta.size || 0);
+        if (!Number.isFinite(expectedSize) || expectedSize < 0) {
+          throw new Error('Invalid incoming file size');
+        }
+
+        recvCurrent = {
+          name: safeName,
+          size: expectedSize,
+          type: meta.type || 'application/octet-stream',
+          received: 0,
+          chunks: [],
+          writer: null,
+          crc: 0xffffffff,
+        };
+
+        if (saveDirectoryHandle) {
+          const fileHandle = await saveDirectoryHandle.getFileHandle(safeName, { create: true });
+          recvCurrent.writer = await fileHandle.createWritable();
+        }
+
+        recvStatus.textContent = `Receiving ${safeName} (0%)`;
+      }
+
+      async function receiverWriteChunk(buf) {
+        if (!recvCurrent) return;
+        recvCurrent.received += buf.byteLength;
+        recvCurrent.crc = updateCrc32(recvCurrent.crc, buf);
+
+        if (recvCurrent.received > recvCurrent.size) {
+          throw new Error('Incoming data exceeds expected file size');
+        }
+
+        if (recvCurrent.writer) {
+          await recvCurrent.writer.write(buf);
+        } else {
+          recvCurrent.chunks.push(buf);
+        }
+
+        const pct = recvCurrent.size > 0 ? Math.floor((recvCurrent.received / recvCurrent.size) * 100) : 0;
+        recvStatus.textContent = `Receiving ${recvCurrent.name} (${pct}%)`;
+      }
+
+      async function receiverFinishFile(meta) {
+        if (!recvCurrent) return;
+        const expectedBytes = Number(meta?.bytes);
+        const expectedCrc32 = String(meta?.crc32 || '').toLowerCase();
+        const actualCrc32 = crc32Hex(recvCurrent.crc);
+        const integrityOk = Number.isFinite(expectedBytes)
+          && expectedBytes === recvCurrent.received
+          && expectedBytes === recvCurrent.size
+          && expectedCrc32 === actualCrc32;
+
+        if (!integrityOk) {
+          if (recvCurrent.writer) {
+            try {
+              await recvCurrent.writer.truncate(0);
+              await recvCurrent.writer.close();
+            } catch {}
+          }
+          const failedName = recvCurrent.name;
+          recvCurrent = null;
+          recvStatus.textContent = `Integrity check failed for ${failedName}. File discarded.`;
+          return;
+        }
+
+        if (recvCurrent.writer) {
+          await recvCurrent.writer.close();
+          recvStatus.textContent = `Saved ${recvCurrent.name}`;
+        } else {
+          const blob = new Blob(recvCurrent.chunks, { type: recvCurrent.type });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = recvCurrent.name;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          recvStatus.textContent = `Downloaded ${recvCurrent.name}`;
+        }
+
+        recvCurrent = null;
+      }
+
+      createBtn.addEventListener('click', () => {
+        const files = Array.from(fileInput.files);
+        if (!files.length) {
+          sendStatus.textContent = 'Select at least one file.';
+          return;
+        }
+        if (files.length > MAX_FILES) {
+          sendStatus.textContent = `Too many files. Max allowed: ${MAX_FILES}.`;
+          return;
+        }
+        if (files.some((f) => f.size > MAX_FILE_SIZE_BYTES)) {
+          sendStatus.textContent = 'One or more files exceed allowed size limit.';
+          return;
+        }
+
+        const meta = files.map((f) => ({
+          name: sanitizeFileName(f.name),
+          size: f.size,
+          type: f.type || 'application/octet-stream',
+          lastModified: f.lastModified || 0,
+        }));
+
+        wsSend({ type: 'register_sender', files: meta });
+      });
+
+      copyCodeBtn.addEventListener('click', async () => {
+        if (!senderCode) {
+          sendStatus.textContent = 'Create a code first.';
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(senderCode);
+          sendStatus.textContent = `Code ${senderCode} copied.`;
+        } catch {
+          sendStatus.textContent = `Copy failed. Code: ${senderCode}`;
+        }
+      });
+
+      copyLinkBtn.addEventListener('click', async () => {
+        if (!senderLink) {
+          sendStatus.textContent = 'Create a code first.';
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(senderLink);
+          sendStatus.textContent = 'Share link copied.';
+        } catch {
+          sendStatus.textContent = `Copy failed. Link: ${senderLink}`;
+        }
+      });
+
+      joinBtn.addEventListener('click', () => {
+        const code = cleanCode(codeInput.value);
+        if (!code) {
+          recvStatus.textContent = 'Enter valid code.';
+          return;
+        }
+        downloadSelectedBtn.disabled = true;
+        downloadAllBtn.disabled = true;
+        wsSend({ type: 'join_share', code });
+        recvStatus.textContent = 'Joining share...';
+      });
+
+      function requestDownload(downloadAll) {
+        if (!receiverChannel || receiverChannel.readyState !== 'open') {
+          recvStatus.textContent = 'Direct channel not ready yet. Wait a moment and try again.';
+          return;
+        }
+
+        const keys = getRequestedKeys(downloadAll);
+        if (!keys.length) {
+          recvStatus.textContent = 'Select at least one file.';
+          return;
+        }
+
+        receiverChannel.send(JSON.stringify({ t: 'request-files', keys }));
+        recvStatus.textContent = `Requested ${keys.length} file(s). Waiting for sender stream...`;
+      }
+
+      downloadSelectedBtn.addEventListener('click', () => requestDownload(false));
+      downloadAllBtn.addEventListener('click', () => requestDownload(true));
+
+      chooseFolderBtn.addEventListener('click', async () => {
+        if (!window.showDirectoryPicker) {
+          recvStatus.textContent = 'Folder picker not supported in this browser. Use Chrome/Edge for very large files.';
+          return;
+        }
+
+        try {
+          saveDirectoryHandle = await window.showDirectoryPicker();
+          recvStatus.textContent = 'Save folder selected. Large files will stream directly to disk.';
+        } catch {
+          recvStatus.textContent = 'Folder selection canceled.';
+        }
+      });
+
+      const params = new URLSearchParams(window.location.search);
+      const codeFromUrl = cleanCode(params.get('code') || '');
+      if (codeFromUrl) codeInput.value = codeFromUrl;
+
+      connectSignal();
+    </script>
+  </body>
+</html>
