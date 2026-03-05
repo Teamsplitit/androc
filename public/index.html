@@ -410,7 +410,13 @@
       }
 
       function fileKey(meta) {
-        return `${meta.name}:${meta.size}:${meta.lastModified || 0}`;
+        return String(meta?.id || `${meta.name}:${meta.size}:${meta.lastModified || 0}`);
+      }
+
+      function fileIdFromFile(file, idx) {
+        const size = Number(file?.size || 0);
+        const lastModified = Number(file?.lastModified || 0);
+        return `f${idx}-${size}-${lastModified}`;
       }
 
       function setMode(mode) {
@@ -645,10 +651,14 @@
             }
 
             const metaByKey = new Map(senderFiles.map((f) => [fileKey(f), f]));
+            const missingKeys = requestedKeys.filter((k) => !metaByKey.has(k));
             const chosen = requestedKeys.map((k) => metaByKey.get(k)).filter(Boolean);
             if (!chosen.length) {
-              dc.send(JSON.stringify({ t: 'error', message: 'Requested files not available' }));
+              dc.send(JSON.stringify({ t: 'error', message: 'Requested files not available on sender' }));
               return;
+            }
+            if (missingKeys.length) {
+              dc.send(JSON.stringify({ t: 'warn', message: `Skipped ${missingKeys.length} missing file(s).` }));
             }
 
             entry.isSending = true;
@@ -749,10 +759,10 @@
 
       async function transferFilesToPeer(dc, fileListMeta, onProgress) {
         const selected = Array.from(fileInput.files);
-        const map = new Map(selected.map((f) => [`${f.name}:${f.size}:${f.lastModified}`, f]));
+        const map = new Map(selected.map((f, idx) => [fileIdFromFile(f, idx), f]));
 
         for (const meta of fileListMeta) {
-          const key = `${meta.name}:${meta.size}:${meta.lastModified}`;
+          const key = fileKey(meta);
           const file = map.get(key);
           if (!file) continue;
 
@@ -837,6 +847,9 @@
           }
           if (msg.t === 'error') {
             recvStatus.textContent = `Sender error: ${msg.message}`;
+          }
+          if (msg.t === 'warn') {
+            recvStatus.textContent = `Sender notice: ${msg.message}`;
           }
           return;
         }
@@ -937,7 +950,8 @@
           return;
         }
 
-        const meta = files.map((f) => ({
+        const meta = files.map((f, idx) => ({
+          id: fileIdFromFile(f, idx),
           name: sanitizeFileName(f.name),
           size: f.size,
           type: f.type || 'application/octet-stream',

@@ -50,6 +50,7 @@ function normalizeFiles(files) {
   const normalized = [];
   for (const f of files) {
     if (!f || typeof f !== 'object') return null;
+    const id = String(f.id || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 80);
     const name = sanitizeFileName(f.name);
     const size = Number(f.size);
     const lastModified = Number(f.lastModified || 0);
@@ -58,6 +59,7 @@ function normalizeFiles(files) {
     if (!Number.isFinite(lastModified) || lastModified < 0) return null;
 
     normalized.push({
+      ...(id ? { id } : {}),
       name,
       size,
       type: typeof f.type === 'string' ? f.type.slice(0, 100) : 'application/octet-stream',
